@@ -1,7 +1,6 @@
-package uk.me.berndporr.flac2raw2;
+package uk.me.berndporr.flac2raw;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.UiAutomation;
 import android.content.Context;
 import android.content.Intent;
@@ -91,7 +90,7 @@ public class UncompressFlacFileTest {
     public void useAppContext() {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getTargetContext();
-        assertEquals("uk.me.berndporr.flac2raw2.test", appContext.getPackageName());
+        assertEquals("uk.me.berndporr.flac2raw.test", appContext.getPackageName());
 
         askPerm();
 

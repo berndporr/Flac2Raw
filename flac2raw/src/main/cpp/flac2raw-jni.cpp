@@ -205,9 +205,9 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst) {
         LOGE("Could not write to the phone memory");
         ExitOnError(SL_RESULT_RESOURCE_ERROR);
     }
-    FILE* fsrc = fopen(src,"r");
+    FILE *fsrc = fopen(src, "r");
     if (fsrc == NULL) {
-        LOGE("Could not read from the phone memory: >>%s<<",src);
+        LOGE("Could not read from the phone memory: >>%s<<", src);
         ExitOnError(SL_RESULT_RESOURCE_ERROR);
     }
     fclose(fsrc);
@@ -440,10 +440,10 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst) {
 
 //-----------------------------------------------------------------
 jint
-Java_uk_me_berndporr_flac2raw2_Flac2Raw_convertFile2File(JNIEnv *env,
-                                                         jclass,
-                                                         jstring fFlac,
-                                                         jstring fRaw) {
+Java_uk_me_berndporr_flac2raw_Flac2Raw_convertFile2File(JNIEnv *env,
+                                                        jclass,
+                                                        jstring fFlac,
+                                                        jstring fRaw) {
     SLresult result;
     SLObjectItf sl;
     SLEngineOption EngineOption[] = {

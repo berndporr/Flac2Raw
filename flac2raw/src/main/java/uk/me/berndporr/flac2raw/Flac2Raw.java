@@ -1,4 +1,4 @@
-package uk.me.berndporr.flac2raw2;
+package uk.me.berndporr.flac2raw;
 
 public class Flac2Raw {
 

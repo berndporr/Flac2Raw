@@ -183,7 +183,7 @@ void DecPlayCallback(
 }
 //-----------------------------------------------------------------
 /* Decode an audio path by opening a file descriptor on that path  */
-void TestDecToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
+void decToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
 {
     gFp = fopen(dst, "w");
     if (NULL == gFp) {
@@ -411,12 +411,14 @@ void TestDecToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
     free(pcmMetaData);
     pcmMetaData = NULL;
 }
+
+
 //-----------------------------------------------------------------
 jint
 Java_uk_me_berndporr_Flac2Raw_convertFile2File(JNIEnv *env,
-                                                                 jclass,
-                                                                 jstring fFlac,
-                                                                 jstring fRaw) {
+                                               jclass,
+                                               jstring fFlac,
+                                               jstring fRaw) {
     SLresult    result;
     SLObjectItf sl;
     SLEngineOption EngineOption[] = {
@@ -430,7 +432,7 @@ Java_uk_me_berndporr_Flac2Raw_convertFile2File(JNIEnv *env,
     /* Realizing the SL Engine in synchronous mode. */
     result = (*sl)->Realize(sl, SL_BOOLEAN_FALSE);
     ExitOnError(result);
-    TestDecToBuffQueue(sl, fFlacUTF,fRawUTF);
+    decToBuffQueue(sl, fFlacUTF,fRawUTF);
     /* Shutdown OpenSL ES */
     (*sl)->Destroy(sl);
     return EXIT_SUCCESS;

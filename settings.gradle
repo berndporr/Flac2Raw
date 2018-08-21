@@ -1,1 +1,1 @@
-include ':app', ':flac2raw'
+include ':flac2raw'

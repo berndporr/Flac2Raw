@@ -40,6 +40,18 @@ How to examine the output with Audacity:
 /* Explicitly requesting SL_IID_ANDROIDSIMPLEBUFFERQUEUE and SL_IID_PREFETCHSTATUS
  * on the AudioPlayer object for decoding, SL_IID_METADATAEXTRACTION for retrieving the
  * format of the decoded audio */
+
+#define  LOG_TAG    "flac2raw"
+
+// logging
+#include <android/log.h>
+
+// convenience wrappers for debugging
+#define  LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define  LOGV(...)  __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, __VA_ARGS__)
+#define  LOGW(...)  __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+
 #define NUM_EXPLICIT_INTERFACES_FOR_PLAYER 3
 /* Size of the decode buffer queue */
 #define NB_BUFFERS_IN_QUEUE 4
@@ -77,7 +89,7 @@ bool eos = false;
 void ExitOnErrorFunc( SLresult result , int line)
 {
     if (SL_RESULT_SUCCESS != result) {
-        fprintf(stderr, "Error code %u encountered at line %d, exiting\n", result, line);
+        LOGE("Error code %u encountered at line %d, exiting", result, line);
         exit(EXIT_FAILURE);
     }
 }
@@ -105,12 +117,12 @@ void PrefetchEventCallback( SLPrefetchStatusItf caller,  void *pContext __unused
     result = (*caller)->GetFillLevel(caller, &level);
     ExitOnError(result);
     SLuint32 status;
-    //fprintf(stdout, "PrefetchEventCallback: received event %u\n", event);
+    LOGV("PrefetchEventCallback: received event %u", event);
     result = (*caller)->GetPrefetchStatus(caller, &status);
     ExitOnError(result);
     if ((PREFETCHEVENT_ERROR_CANDIDATE == (event & PREFETCHEVENT_ERROR_CANDIDATE))
             && (level == 0) && (status == SL_PREFETCHSTATUS_UNDERFLOW)) {
-        fprintf(stdout, "PrefetchEventCallback: Error while prefetching data, exiting\n");
+        LOGE("PrefetchEventCallback: Error while prefetching data, exiting");
         prefetchError = true;
         SignalEos();
     }
@@ -126,14 +138,14 @@ void DecProgressCallback(
     result = (*caller)->GetPosition(caller, &msec);
     ExitOnError(result);
     if (SL_PLAYEVENT_HEADATEND & event) {
-        fprintf(stdout, "SL_PLAYEVENT_HEADATEND current position=%u ms\n", msec);
+        LOGV("SL_PLAYEVENT_HEADATEND current position=%u ms", msec);
         SignalEos();
     }
     if (SL_PLAYEVENT_HEADATNEWPOS & event) {
-        fprintf(stdout, "SL_PLAYEVENT_HEADATNEWPOS current position=%u ms\n", msec);
+        LOGV("SL_PLAYEVENT_HEADATNEWPOS current position=%u ms", msec);
     }
     if (SL_PLAYEVENT_HEADATMARKER & event) {
-        fprintf(stdout, "SL_PLAYEVENT_HEADATMARKER current position=%u ms\n", msec);
+        LOGV("SL_PLAYEVENT_HEADATMARKER current position=%u ms", msec);
     }
 }
 //-----------------------------------------------------------------
@@ -148,11 +160,11 @@ void DecPlayCallback(
         SLmillisecond msec;
         SLresult result = (*pCntxt->playItf)->GetPosition(pCntxt->playItf, &msec);
         ExitOnError(result);
-        printf("DecPlayCallback called (iteration %d): current position=%u ms\n", counter, msec);
+        printf("DecPlayCallback called (iteration %d): current position=%u ms", counter, msec);
     }
     /* Save the decoded data  */
     if (fwrite(pCntxt->pDataBase, 1, BUFFER_SIZE_IN_BYTES, gFp) < BUFFER_SIZE_IN_BYTES) {
-        fprintf(stdout, "Error writing to output file, signaling EOS\n");
+        LOGE("Error writing to output file, signaling EOS");
         SignalEos();
         return;
     }
@@ -175,10 +187,10 @@ void DecPlayCallback(
     //         pcmMetaData->encoding == SL_CHARACTERENCODING_BINARY
     //         pcmMetaData->size == sizeof(SLuint32)
     //       but the call was successful for the PCM format keys, so those conditions are implied
-    fprintf(stdout, "sample rate = %dHz, ", *((SLuint32*)pcmMetaData->data));
+    LOGV("sample rate = %dHz, ", *((SLuint32*)pcmMetaData->data));
     res = (*pCntxt->metaItf)->GetValue(pCntxt->metaItf, channelCountKeyIndex,
             PCM_METADATA_VALUE_SIZE, pcmMetaData);  ExitOnError(res);
-    fprintf(stdout, " channel count = %d\n", *((SLuint32*)pcmMetaData->data));
+    LOGV("channel count = %d", *((SLuint32*)pcmMetaData->data));
     formatQueried = true;
 }
 //-----------------------------------------------------------------
@@ -249,7 +261,7 @@ void decToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
     pcm.formatType = SL_DATAFORMAT_PCM;
     // FIXME valid value required but currently ignored
     pcm.numChannels = 1;
-    pcm.samplesPerSec = SL_SAMPLINGRATE_8;
+    pcm.samplesPerSec = SL_SAMPLINGRATE_48;
     pcm.bitsPerSample = SL_PCMSAMPLEFORMAT_FIXED_16;
     pcm.containerSize = 16;
     pcm.channelMask = SL_SPEAKER_FRONT_LEFT;
@@ -260,11 +272,11 @@ void decToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
     result = (*EngineItf)->CreateAudioPlayer(EngineItf, &player, &decSource, &decDest,
             NUM_EXPLICIT_INTERFACES_FOR_PLAYER, iidArray, required);
     ExitOnError(result);
-    fprintf(stdout, "Player created\n");
+    LOGV("Player created");
     /* Realize the player in synchronous mode. */
     result = (*player)->Realize(player, SL_BOOLEAN_FALSE);
     ExitOnError(result);
-    fprintf(stdout, "Player realized\n");
+    LOGV("Player realized");
     /* Get the play interface which is implicit */
     result = (*player)->GetInterface(player, SL_IID_PLAY, (void*)&playItf);
     ExitOnError(result);
@@ -279,7 +291,7 @@ void decToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
     ExitOnError(result);
     result = (*playItf)->RegisterCallback(playItf, DecProgressCallback, NULL);
     ExitOnError(result);
-    fprintf(stdout, "Play callback registered\n");
+    LOGV("Play callback registered");
     /* Get the buffer queue interface which was explicitly requested */
     result = (*player)->GetInterface(player, SL_IID_ANDROIDSIMPLEBUFFERQUEUE,
             (void*)&decBuffQueueItf);
@@ -301,14 +313,13 @@ void decToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
     result = (*decBuffQueueItf)->RegisterCallback(decBuffQueueItf, DecPlayCallback, &cntxt);
     ExitOnError(result);
     /* Enqueue buffers to map the region of memory allocated to store the decoded data */
-    fprintf(stdout,"Enqueueing buffer ");
+    LOGV("Enqueueing buffer ");
     for(int i = 0 ; i < NB_BUFFERS_IN_QUEUE ; i++) {
         fprintf(stdout,"%d ", i);
         result = (*decBuffQueueItf)->Enqueue(decBuffQueueItf, cntxt.pData, BUFFER_SIZE_IN_BYTES);
         ExitOnError(result);
         cntxt.pData += BUFFER_SIZE_IN_BYTES;
     }
-    fprintf(stdout,"\n");
     cntxt.pData = cntxt.pDataBase;
     /* ------------------------------------------------------ */
     /* Initialize the callback for prefetch errors, if we can't open the resource to decode */
@@ -331,7 +342,7 @@ void decToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
         timeOutIndex--;
     }
     if (timeOutIndex == 0 || prefetchError) {
-        fprintf(stderr, "Failure to prefetch data in time, exiting\n");
+        LOGE("Failure to prefetch data in time, exiting");
         ExitOnError(SL_RESULT_CONTENT_NOT_FOUND);
     }
     /* ------------------------------------------------------ */
@@ -340,9 +351,9 @@ void decToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
     result = (*playItf)->GetDuration(playItf, &durationInMsec);
     ExitOnError(result);
     if (durationInMsec == SL_TIME_UNKNOWN) {
-        fprintf(stdout, "Content duration is unknown\n");
+        LOGV("Content duration is unknown");
     } else {
-        fprintf(stdout, "Content duration is %ums\n", durationInMsec);
+        LOGV("Content duration is %ums", durationInMsec);
     }
     /* ------------------------------------------------------ */
     /* Display the metadata obtained from the decoder */
@@ -364,7 +375,7 @@ void decToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
         if (NULL != keyInfo) {
             result = (*mdExtrItf)->GetKey(mdExtrItf, i, keySize, keyInfo);
             ExitOnError(result);
-            fprintf(stdout, "key[%d] size=%d, name=%s \tvalue size=%d \n",
+            LOGV("key[%d] size=%d, name=%s \tvalue size=%d",
                     i, keyInfo->size, keyInfo->data, valueSize);
             /* find out the key index of the metadata we're interested in */
             if (!strcmp((char*)keyInfo->data, ANDROID_KEY_PCMFORMAT_NUMCHANNELS)) {
@@ -376,35 +387,35 @@ void decToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
         }
     }
     if (channelCountKeyIndex != -1) {
-        fprintf(stdout, "Key %s is at index %d\n",
+        LOGV("Key %s is at index %d",
                 ANDROID_KEY_PCMFORMAT_NUMCHANNELS, channelCountKeyIndex);
     } else {
-        fprintf(stderr, "Unable to find key %s\n", ANDROID_KEY_PCMFORMAT_NUMCHANNELS);
+        LOGD("Unable to find key %s", ANDROID_KEY_PCMFORMAT_NUMCHANNELS);
     }
     if (sampleRateKeyIndex != -1) {
-        fprintf(stdout, "Key %s is at index %d\n",
+        LOGV("Key %s is at index %d",
                 ANDROID_KEY_PCMFORMAT_SAMPLERATE, sampleRateKeyIndex);
     } else {
-        fprintf(stderr, "Unable to find key %s\n", ANDROID_KEY_PCMFORMAT_SAMPLERATE);
+        LOGD("Unable to find key %s", ANDROID_KEY_PCMFORMAT_SAMPLERATE);
     }
     /* ------------------------------------------------------ */
     /* Start decoding */
     result = (*playItf)->SetPlayState(playItf, SL_PLAYSTATE_PLAYING);
     ExitOnError(result);
-    fprintf(stdout, "Starting to decode\n");
+    LOGV("Starting to decode");
     /* Decode until the end of the stream is reached */
     {
         while (!eos) {
-            usleep(100000);
+            usleep(10 * 1000);
         }
     }
-    fprintf(stdout, "EOS signaled\n");
+    LOGV("EOS signaled");
     /* ------------------------------------------------------ */
     /* End of decoding */
     /* Stop decoding */
     result = (*playItf)->SetPlayState(playItf, SL_PLAYSTATE_STOPPED);
     ExitOnError(result);
-    fprintf(stdout, "Stopped decoding\n");
+    LOGV("Stopped decoding");
     /* Destroy the AudioPlayer object */
     (*player)->Destroy(player);
     fclose(gFp);

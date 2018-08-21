@@ -21,7 +21,7 @@ in the Music folder.
 
 ## Status
 
-alpha: converts properly mono to mono raw but but not tested for any other formats
+beta: converts properly mono to mono raw but but not tested for any other formats
 
 ## Credit
 [Google open source project](https://android.googlesource.com/platform/frameworks/wilhelm/+/master/tests/examples/slesTestDecodeToBuffQueue.cpp)

@@ -19,9 +19,9 @@ Place a mono flac file called `test.flac` in the
 Music folder of your phone. Run the unit test and you should then see a `test.raw`
 in the Music folder.
 
-# Status
+## Status
 
 alpha: converts properly mono to mono raw but but not tested for any other formats
 
-# Credit
+## Credit
 [Google open source project](https://android.googlesource.com/platform/frameworks/wilhelm/+/master/tests/examples/slesTestDecodeToBuffQueue.cpp)

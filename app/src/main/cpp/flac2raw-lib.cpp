@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright (C) 2018 Bernd Porr, mail@berndporr.me.uk
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,38 +165,6 @@ void DecPlayCallback(
     // Note: adding a sleep here or any sync point is a way to slow down the decoding, or
     //  synchronize it with some other event, as the OpenSL ES framework will block until the
     //  buffer queue callback return to proceed with the decoding.
-#if 0
-    /* Example: buffer queue state display */
-    SLAndroidSimpleBufferQueueState decQueueState;
-    ExitOnError( (*queueItf)->GetState(queueItf, &decQueueState) );
-    fprintf(stderr, "\DecBufferQueueCallback now has pCntxt->pData=%p queue: "
-            "count=%u playIndex=%u\n",
-            pCntxt->pData, decQueueState.count, decQueueState.index);
-#endif
-#if 0
-    /* Example: display duration in callback where we use the callback context for the SLPlayItf*/
-    SLmillisecond durationInMsec = SL_TIME_UNKNOWN;
-    SLresult result = (*pCntxt->playItf)->GetDuration(pCntxt->playItf, &durationInMsec);
-    ExitOnError(result);
-    if (durationInMsec == SL_TIME_UNKNOWN) {
-        fprintf(stdout, "Content duration is unknown (in dec callback)\n");
-    } else {
-        fprintf(stdout, "Content duration is %ums (in dec callback)\n",
-                durationInMsec);
-    }
-#endif
-#if 0
-    /* Example: display position in callback where we use the callback context for the SLPlayItf*/
-    SLmillisecond posMsec = SL_TIME_UNKNOWN;
-    SLresult result = (*pCntxt->playItf)->GetPosition(pCntxt->playItf, &posMsec);
-    ExitOnError(result);
-    if (posMsec == SL_TIME_UNKNOWN) {
-        fprintf(stdout, "Content position is unknown (in dec callback)\n");
-    } else {
-        fprintf(stdout, "Content position is %ums (in dec callback)\n",
-                posMsec);
-    }
-#endif
     /* Example: query of the decoded PCM format */
     if (formatQueried) {
         return;

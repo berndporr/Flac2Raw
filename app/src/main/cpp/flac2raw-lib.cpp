@@ -183,16 +183,9 @@ void DecPlayCallback(
 }
 //-----------------------------------------------------------------
 /* Decode an audio path by opening a file descriptor on that path  */
-void TestDecToBuffQueue( SLObjectItf sl, const char* path)
+void TestDecToBuffQueue( SLObjectItf sl, const char* src, const char* dst)
 {
-    size_t len = strlen((const char *) path);
-    char* outputPath = (char*) malloc(len + 4 + 1); // save room to concatenate ".raw"
-    if (NULL == outputPath) {
-        ExitOnError(SL_RESULT_RESOURCE_ERROR);
-    }
-    memcpy(outputPath, path, len + 1);
-    strcat(outputPath, ".raw");
-    gFp = fopen(outputPath, "w");
+    gFp = fopen(dst, "w");
     if (NULL == gFp) {
         ExitOnError(SL_RESULT_RESOURCE_ERROR);
     }
@@ -241,7 +234,7 @@ void TestDecToBuffQueue( SLObjectItf sl, const char* path)
     iidArray[2] = SL_IID_METADATAEXTRACTION;
     /* Setup the data source */
     decUri.locatorType = SL_DATALOCATOR_URI;
-    decUri.URI = (SLchar*)path;
+    decUri.URI = (SLchar*)src;
     decMime.formatType = SL_DATAFORMAT_MIME;
     /*     this is how ignored mime information is specified, according to OpenSL ES spec
      *     in 9.1.6 SLDataFormat_MIME and 8.23 SLMetadataTraversalItf GetChildInfo */
@@ -419,27 +412,25 @@ void TestDecToBuffQueue( SLObjectItf sl, const char* path)
     pcmMetaData = NULL;
 }
 //-----------------------------------------------------------------
-int doDecode(int argc, char* const argv[])
-{
+jint
+Java_uk_me_berndporr_Flac2Raw_convertFile2File(JNIEnv *env,
+                                                                 jclass,
+                                                                 jstring fFlac,
+                                                                 jstring fRaw) {
     SLresult    result;
     SLObjectItf sl;
-    fprintf(stdout, "OpenSL ES test %s: exercises SLPlayItf and SLAndroidSimpleBufferQueueItf ",
-            argv[0]);
-    fprintf(stdout, "on an AudioPlayer object to decode a URI to PCM\n");
-    if (argc != 2) {
-        fprintf(stdout, "Usage: \t%s source_file\n", argv[0]);
-        fprintf(stdout, "Example: \"%s /sdcard/myFile.mp3\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
     SLEngineOption EngineOption[] = {
             {(SLuint32) SL_ENGINEOPTION_THREADSAFE, (SLuint32) SL_BOOLEAN_TRUE}
     };
+    const char *fFlacUTF = env->GetStringUTFChars(fFlac, NULL);
+    const char *fRawUTF = env->GetStringUTFChars(fRaw, NULL);
+
     result = slCreateEngine( &sl, 1, EngineOption, 0, NULL, NULL);
     ExitOnError(result);
     /* Realizing the SL Engine in synchronous mode. */
     result = (*sl)->Realize(sl, SL_BOOLEAN_FALSE);
     ExitOnError(result);
-    TestDecToBuffQueue(sl, argv[1]);
+    TestDecToBuffQueue(sl, fFlacUTF,fRawUTF);
     /* Shutdown OpenSL ES */
     (*sl)->Destroy(sl);
     return EXIT_SUCCESS;

@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/Flac2Raw.iml" filepath="$PROJECT_DIR$/.idea/Flac2Raw.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Flac2Raw.iml" filepath="$PROJECT_DIR$/Flac2Raw.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
       <module fileurl="file://$PROJECT_DIR$/flac2raw/flac2raw.iml" filepath="$PROJECT_DIR$/flac2raw/flac2raw.iml" />
     </modules>

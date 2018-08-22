@@ -3,8 +3,8 @@
 This Android package converts a flac file to a raw file. The output format is 16 bit / little
 endian without any header. Just raw audio. Supported sampling rates are 8kHz, 44.1kHz and 48kHz.
 
-It uses the C high performance audio stack of Android so is as fast as it can write to the
-internal memory.
+It uses the C high performance audio stack of Android so the only limiting factor is the writing
+speed of the memory card.
 
 ## Usage
 

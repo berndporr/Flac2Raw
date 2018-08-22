@@ -6,6 +6,6 @@ public class Flac2Raw {
         System.loadLibrary("flac2raw-jni");
     }
 
-    public native int convertFile2File(String flacFile, String rawFile);
+    public native int uncompressFile2File(String flacFile, String rawFile, int samplingRateHz);
 
 }

@@ -97,7 +97,10 @@ public class UncompressFlacFileTest {
         // instantiate the converter
         Flac2Raw flac2Raw = new Flac2Raw();
         // run it
-        flac2Raw.convertFile2File(getFullPath(audioFileName+".flac"),getFullPath(audioFileName+".raw"));
+        flac2Raw.uncompressFile2File(
+                getFullPath(audioFileName+".flac"),
+                getFullPath(audioFileName+".raw"),
+                48000);
 
         updateFileSystem(appContext);
     }

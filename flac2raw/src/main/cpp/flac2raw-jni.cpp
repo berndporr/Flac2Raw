@@ -199,7 +199,7 @@ void DecPlayCallback(
 }
 //-----------------------------------------------------------------
 /* Decode an audio path by opening a file descriptor on that path  */
-void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst) {
+void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst, int samplingRateHz) {
     gFp = fopen(dst, "w");
     if (NULL == gFp) {
         LOGE("Could not write to the phone memory");
@@ -271,10 +271,23 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst) {
     pcm.formatType = SL_DATAFORMAT_PCM;
     // FIXME valid value required but currently ignored
     pcm.numChannels = 1;
-    pcm.samplesPerSec = SL_SAMPLINGRATE_48;
+    switch (samplingRateHz) {
+        case 48000:
+            pcm.samplesPerSec = SL_SAMPLINGRATE_48;
+            break;
+        case 44100:
+            pcm.samplesPerSec = SL_SAMPLINGRATE_44_1;
+            break;
+        case 8000:
+            pcm.samplesPerSec = SL_SAMPLINGRATE_8;
+            break;
+        default:
+            pcm.samplesPerSec = SL_SAMPLINGRATE_48;
+            break;
+    }
     pcm.bitsPerSample = SL_PCMSAMPLEFORMAT_FIXED_16;
     pcm.containerSize = 16;
-    pcm.channelMask = SL_SPEAKER_FRONT_LEFT;
+    pcm.channelMask = SL_SPEAKER_FRONT_CENTER;
     pcm.endianness = SL_BYTEORDER_LITTLEENDIAN;
     decDest.pLocator = (void *) &decBuffQueue;
     decDest.pFormat = (void *) &pcm;
@@ -440,10 +453,11 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst) {
 
 //-----------------------------------------------------------------
 jint
-Java_uk_me_berndporr_flac2raw_Flac2Raw_convertFile2File(JNIEnv *env,
+Java_uk_me_berndporr_flac2raw_Flac2Raw_uncompressFile2File(JNIEnv *env,
                                                         jclass,
                                                         jstring fFlac,
-                                                        jstring fRaw) {
+                                                        jstring fRaw,
+                                                        jint samplingRateHz) {
     SLresult result;
     SLObjectItf sl;
     SLEngineOption EngineOption[] = {
@@ -457,7 +471,7 @@ Java_uk_me_berndporr_flac2raw_Flac2Raw_convertFile2File(JNIEnv *env,
     /* Realizing the SL Engine in synchronous mode. */
     result = (*sl)->Realize(sl, SL_BOOLEAN_FALSE);
     ExitOnError(result);
-    decToBuffQueue(sl, fFlacUTF, fRawUTF);
+    decToBuffQueue(sl, fFlacUTF, fRawUTF, samplingRateHz);
     /* Shutdown OpenSL ES */
     (*sl)->Destroy(sl);
     return EXIT_SUCCESS;

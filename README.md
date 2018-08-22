@@ -22,14 +22,14 @@ Add to your gradle config file the line: `implementation project(":flac2raw-rele
 ### JAVA code
 
 It's implemented as a class with a single method. Instantiating the class loads the
-shared library into memory and then you can call `convertFile2File` which converts the
+shared library into memory and then you can call `uncompressFile2File` which converts the
 audio. The call is blocking.
 
 ```
 // instantiate the converter
 Flac2Raw flac2Raw = new Flac2Raw();
 // run it
-flac2Raw.convertFile2File(getFullPath(audioFileName+".flac"),getFullPath(audioFileName+".raw"),48000);
+flac2Raw.uncompressFile2File(getFullPath(audioFileName+".flac"),getFullPath(audioFileName+".raw"),48000);
 ```
 
 ## Unit test

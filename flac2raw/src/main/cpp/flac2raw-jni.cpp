@@ -14,21 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* Audio Decode Test
-First run the program from shell:
-  # slesTest_decodeToBuffQueue /sdcard/myFile.mp3 4
-These use adb on host to retrieve the decoded file:
-  % adb pull /sdcard/myFile.mp3.raw myFile.raw
-How to examine the output with Audacity:
- Project / Import raw data
- Select myFile.raw file, then click Open button
- Choose these options:
-  Signed 16-bit PCM
-  Little-endian
-  1 Channel (Mono) / 2 Channels (Stereo) based on the selected file
-  Sample rate same as the selected file
- Click Import button
-*/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -37,9 +23,6 @@ How to examine the output with Audacity:
 #include <fcntl.h>
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
-/* Explicitly requesting SL_IID_ANDROIDSIMPLEBUFFERQUEUE and SL_IID_PREFETCHSTATUS
- * on the AudioPlayer object for decoding, SL_IID_METADATAEXTRACTION for retrieving the
- * format of the decoded audio */
 
 extern "C" {
 
@@ -143,12 +126,6 @@ void DecProgressCallback(
     if (SL_PLAYEVENT_HEADATEND & event) {
         LOGV("SL_PLAYEVENT_HEADATEND current position=%u ms", msec);
         SignalEos();
-    }
-    if (SL_PLAYEVENT_HEADATNEWPOS & event) {
-        LOGV("SL_PLAYEVENT_HEADATNEWPOS current position=%u ms", msec);
-    }
-    if (SL_PLAYEVENT_HEADATMARKER & event) {
-        LOGV("SL_PLAYEVENT_HEADATMARKER current position=%u ms", msec);
     }
 }
 //-----------------------------------------------------------------
@@ -304,15 +281,7 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst, int sampli
     /* Get the play interface which is implicit */
     result = (*player)->GetInterface(player, SL_IID_PLAY, (void *) &playItf);
     ExitOnError(result);
-    /* Set up the player callback to get events during the decoding */
-    // FIXME currently ignored
-    result = (*playItf)->SetMarkerPosition(playItf, 2000);
-    ExitOnError(result);
-    result = (*playItf)->SetPositionUpdatePeriod(playItf, 500);
-    ExitOnError(result);
-    result = (*playItf)->SetCallbackEventsMask(playItf,
-                                               SL_PLAYEVENT_HEADATMARKER |
-                                               SL_PLAYEVENT_HEADATNEWPOS | SL_PLAYEVENT_HEADATEND);
+    result = (*playItf)->SetCallbackEventsMask(playItf, SL_PLAYEVENT_HEADATEND);
     ExitOnError(result);
     result = (*playItf)->RegisterCallback(playItf, DecProgressCallback, NULL);
     ExitOnError(result);

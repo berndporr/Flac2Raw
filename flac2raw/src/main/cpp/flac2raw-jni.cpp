@@ -47,8 +47,6 @@ extern "C" {
 int8_t pcmData[NB_BUFFERS_IN_QUEUE * BUFFER_SIZE_IN_BYTES];
 /* destination for decoded data */
 static FILE *gFp;
-/* to display the number of decode iterations */
-static int counter = 0;
 /* metadata key index for the PCM format information we want to retrieve */
 static int channelCountKeyIndex = -1;
 static int sampleRateKeyIndex = -1;
@@ -133,14 +131,7 @@ void DecProgressCallback(
 void DecPlayCallback(
         SLAndroidSimpleBufferQueueItf queueItf,
         void *pContext) {
-    counter++;
     CallbackCntxt *pCntxt = (CallbackCntxt *) pContext;
-    if (counter % 1000 == 0) {
-        SLmillisecond msec;
-        SLresult result = (*pCntxt->playItf)->GetPosition(pCntxt->playItf, &msec);
-        ExitOnError(result);
-        printf("DecPlayCallback called (iteration %d): current position=%u ms", counter, msec);
-    }
     /* Save the decoded data  */
     if (fwrite(pCntxt->pDataBase, 1, BUFFER_SIZE_IN_BYTES, gFp) < BUFFER_SIZE_IN_BYTES) {
         LOGE("Error writing to output file, signaling EOS");
@@ -309,7 +300,6 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst, int sampli
     /* Enqueue buffers to map the region of memory allocated to store the decoded data */
     LOGV("Enqueueing buffer ");
     for (int i = 0; i < NB_BUFFERS_IN_QUEUE; i++) {
-        fprintf(stdout, "%d ", i);
         result = (*decBuffQueueItf)->Enqueue(decBuffQueueItf, cntxt.pData, BUFFER_SIZE_IN_BYTES);
         ExitOnError(result);
         cntxt.pData += BUFFER_SIZE_IN_BYTES;

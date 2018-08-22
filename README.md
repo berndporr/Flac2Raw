@@ -34,13 +34,13 @@ flac2Raw.convertFile2File(getFullPath(audioFileName+".flac"),getFullPath(audioFi
 
 ## Unit test
 The unit test `UncompressFlacFileTest.java` contains a full example. 
-Place a mono flac file called `test.flac` in the
+Place a mono flac file called `test.flac` which has a sampling rate of 48kHz in the
 `Music` folder of your phone. Run the unit test and you should then see a `test.raw`
 in the `Music` folder.
 
 ## Status
 
-beta: converts properly flac mono to mono raw but not tested for any other formats. It should also work
+Converts properly flac mono to mono raw (see unit test) but not tested for any other formats. It should also work
 with aac and mp3.
 
 ## Credit

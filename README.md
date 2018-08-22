@@ -1,6 +1,8 @@
 # Flac to Raw
 
-This Android package converts a flac file to a raw file. The output sampling rate is 48kHz.
+This Android package converts a flac file to a raw file. The output format is 16 bit / little
+endian without any header. Just raw audio. Supported sampling rates are 8kHz, 44.1kHz and 48kHz.
+
 It uses the C high performance audio stack of Android so is as fast as it can write to the
 internal memory.
 
@@ -8,16 +10,20 @@ internal memory.
 
 ### Compile the library
 
-Select Build -> Build variant and select release. Compile it.
+Select `Build` -> `Build variant` and select `release`. Then compile the library.
 
-### Importing the library
+### Importing the library into your project
 
-In your project do File -> New -> New Module -> Import AAR. Import the library from
-`Flac2Raw/flac2raw/build/outputs/aar/flac2raw-release`.
+In your project do `File` -> `New` -> `New Module` -> `Import AAR`. Import the library from
+`Flac2Raw/flac2raw/build/outputs/aar/flac2raw-release.aar`.
 
-Add to your gradle the line: `implementation project(":flac2raw-release")`.
+Add to your gradle config file the line: `implementation project(":flac2raw-release")`.
 
 ### JAVA code
+
+It's implemented as a class with a single method. Instantiating the class loads the
+shared library into memory and then you can call `convertFile2File` which converts the
+audio. The call is blocking.
 
 ```
 // instantiate the converter
@@ -29,12 +35,13 @@ flac2Raw.convertFile2File(getFullPath(audioFileName+".flac"),getFullPath(audioFi
 ## Unit test
 The unit test `UncompressFlacFileTest.java` contains a full example. 
 Place a mono flac file called `test.flac` in the
-Music folder of your phone. Run the unit test and you should then see a `test.raw`
-in the Music folder.
+`Music` folder of your phone. Run the unit test and you should then see a `test.raw`
+in the `Music` folder.
 
 ## Status
 
-beta: converts properly flac mono to mono raw but not tested for any other formats
+beta: converts properly flac mono to mono raw but not tested for any other formats. It should also work
+with aac and mp3.
 
 ## Credit
 [Google open source project](https://android.googlesource.com/platform/frameworks/wilhelm/+/master/tests/examples/slesTestDecodeToBuffQueue.cpp)

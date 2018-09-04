@@ -23,8 +23,8 @@ Add to your gradle config file the line: `implementation project(":flac2raw-rele
 ### JAVA code
 
 It's implemented as a class with a single method. Instantiating the class loads the
-shared library into memory and then you can call `uncompressFile2File` which converts the
-audio. The call is blocking.
+shared library into memory and then you can call `uncompressFile2File` or `uncompressAsset2File` which converts the
+audio. The call is blocking but should be thread safe if called multiple times from different threads.
 
 #### If you want to convert from file to file:
 ```

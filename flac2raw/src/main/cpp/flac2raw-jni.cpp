@@ -27,6 +27,7 @@
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 #include <assert.h>
+#include <errno.h>
 
 
 extern "C" {
@@ -78,6 +79,8 @@ typedef struct CallbackCntxt_ {
     bool eos = false;
     /* Used to signal prefetching failures */
     bool prefetchError = false;
+    /* error number */
+    int error_number = 0;
 } CallbackCntxt;
 
 
@@ -114,6 +117,7 @@ void PrefetchEventCallback(SLPrefetchStatusItf caller, void *pContext, SLuint32 
         LOGE("PrefetchEventCallback: Error while prefetching data, exiting");
         pCntxt->prefetchError = true;
         pCntxt->eos = true;
+        pCntxt->error_number = -1;
     }
 }
 
@@ -130,6 +134,7 @@ void DecProgressCallback(
     if (SL_PLAYEVENT_HEADATEND & event) {
         LOGV("SL_PLAYEVENT_HEADATEND current position=%u ms", msec);
         pCntxt->eos = true;
+        pCntxt->error_number = 0;
     }
 }
 //-----------------------------------------------------------------
@@ -144,6 +149,7 @@ void DecPlayCallback(
         BUFFER_SIZE_IN_BYTES) {
         LOGE("Error writing to output file, signaling EOS");
         pCntxt->eos = true;
+        pCntxt->error_number = errno;
         return;
     }
     /* Increase data pointer by buffer size */
@@ -180,7 +186,7 @@ int decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, int
     cntxt.gFdestination = fopen(dst, "w");
     if (NULL == cntxt.gFdestination) {
         LOGE("Could not write to the phone memory");
-        return -1;
+        return errno;
     }
     SLresult result;
     SLEngineItf EngineItf;
@@ -285,6 +291,7 @@ int decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, int
     cntxt.pDataBase = (int8_t *) &cntxt.pcmData;
     cntxt.pData = cntxt.pDataBase;
     cntxt.size = sizeof(cntxt.pcmData);
+    cntxt.error_number = 0;
     result = (*decBuffQueueItf)->RegisterCallback(decBuffQueueItf,
                                                   DecPlayCallback,
                                                   &cntxt);
@@ -400,7 +407,7 @@ int decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, int
     fclose(cntxt.gFdestination);
     free(cntxt.pcmMetaData);
 
-    return 0;
+    return cntxt.error_number;
 }
 
 
@@ -424,7 +431,7 @@ Java_uk_me_berndporr_flac2raw_Flac2Raw_uncompressFile2File(JNIEnv *env,
         LOGE("Could not read from the phone memory: >>%s<<", fFlacUTF);
         env->ReleaseStringUTFChars(fFlac, fFlacUTF);
         env->ReleaseStringUTFChars(fRaw, fRawUTF);
-        return 0;
+        return errno;
     }
     fclose(fsrc);
 
@@ -452,14 +459,14 @@ Java_uk_me_berndporr_flac2raw_Flac2Raw_uncompressFile2File(JNIEnv *env,
     result = (*sl)->Realize(sl, SL_BOOLEAN_FALSE);
     ExitOnError(result);
 
-    decToBuffQueue(sl, &decSource, fRawUTF, samplingRateHz);
+    int r = decToBuffQueue(sl, &decSource, fRawUTF, samplingRateHz);
     /* Shutdown OpenSL ES */
     (*sl)->Destroy(sl);
 
     env->ReleaseStringUTFChars(fFlac, fFlacUTF);
     env->ReleaseStringUTFChars(fRaw, fRawUTF);
 
-    return EXIT_SUCCESS;
+    return r;
 }
 
 

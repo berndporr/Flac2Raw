@@ -26,7 +26,8 @@ import static org.junit.Assert.*;
  * Instrumented test, which will execute on an Android device.
  *
  * This test converts a flac file in "/sdcard/Music/test.flac" into a raw file at 48kHz sampling
- * rate. You need to copy test.flac into this directory.
+ * rate. You need to copy test.flac into this directory. It also reads an Android Asset and
+ * copies it to /Music.
  */
 @RunWith(AndroidJUnit4.class)
 public class UncompressFlacFileTest {

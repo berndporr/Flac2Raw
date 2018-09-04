@@ -48,31 +48,46 @@ extern "C" {
 /* Size of each buffer in the queue */
 #define BUFFER_SIZE_IN_SAMPLES 1152 // number of samples per MP3 frame
 #define BUFFER_SIZE_IN_BYTES   (2*BUFFER_SIZE_IN_SAMPLES)
-/* Local storage for decoded audio data */
-int8_t pcmData[NB_BUFFERS_IN_QUEUE * BUFFER_SIZE_IN_BYTES];
-/* destination for decoded data */
-static FILE *gFp;
-/* metadata key index for the PCM format information we want to retrieve */
-static int channelCountKeyIndex = -1;
-static int sampleRateKeyIndex = -1;
 /* size of the struct to retrieve the PCM format metadata values: the values we're interested in
  * are SLuint32, but it is saved in the data field of a SLMetadataInfo, hence the larger size.
  * Nate that this size is queried and displayed at l.452 for demonstration/test purposes.
  *  */
 #define PCM_METADATA_VALUE_SIZE 32
-/* used to query metadata values */
-static SLMetadataInfo *pcmMetaData = NULL;
-/* we only want to query / display the PCM format once */
-static bool formatQueried = false;
-/* to signal to the test app the end of the stream to decode has been reached */
-bool eos = false;
+
+
+//-----------------------------------------------------------------
+/* Structure keeping all info for a run */
+typedef struct CallbackCntxt_ {
+    SLPlayItf playItf;
+    SLMetadataExtractionItf metaItf;
+    SLuint32 size;
+    SLint8 *pDataBase = NULL;    // Base address of local audio data storage
+    SLint8 *pData = NULL;        // Current address of local audio data storage
+    /* Local storage for decoded audio data */
+    int8_t pcmData[NB_BUFFERS_IN_QUEUE * BUFFER_SIZE_IN_BYTES];
+    /* destination for decoded data */
+    FILE *gFdestination = NULL;
+    /* metadata key index for the PCM format information we want to retrieve */
+    int channelCountKeyIndex = -1;
+    int sampleRateKeyIndex = -1;
+    /* used to query metadata values */
+    SLMetadataInfo *pcmMetaData = NULL;
+    /* we only want to query / display the PCM format once */
+    bool formatQueried = false;
+    /* to signal to the test app the end of the stream to decode has been reached */
+    bool eos = false;
+    /* Used to signal prefetching failures */
+    bool prefetchError = false;
+} CallbackCntxt;
+
+
 /* used to detect errors likely to have occured when the OpenSL ES framework fails to open
  * a resource, for instance because a file URI is invalid, or an HTTP server doesn't respond.
  */
 #define PREFETCHEVENT_ERROR_CANDIDATE \
         (SL_PREFETCHEVENT_STATUSCHANGE | SL_PREFETCHEVENT_FILLLEVELCHANGE)
 //-----------------------------------------------------------------
-/* Exits the application if an error is encountered */
+/* Brute force: Exits the application if an error is encountered */
 #define ExitOnError(x) ExitOnErrorFunc(x,__LINE__)
 
 void ExitOnErrorFunc(SLresult result, int line) {
@@ -82,27 +97,12 @@ void ExitOnErrorFunc(SLresult result, int line) {
     }
 }
 
-/* Used to signal prefetching failures */
-bool prefetchError = false;
-//-----------------------------------------------------------------
-/* Structure for passing information to callback function */
-typedef struct CallbackCntxt_ {
-    SLPlayItf playItf;
-    SLMetadataExtractionItf metaItf;
-    SLuint32 size;
-    SLint8 *pDataBase;    // Base address of local audio data storage
-    SLint8 *pData;        // Current address of local audio data storage
-} CallbackCntxt;
-
-//-----------------------------------------------------------------
-void SignalEos() {
-    eos = true;
-}
 //-----------------------------------------------------------------
 /* Callback for "prefetch" events, here used to detect audio resource opening errors */
-void PrefetchEventCallback(SLPrefetchStatusItf caller, void *pContext __unused, SLuint32 event) {
+void PrefetchEventCallback(SLPrefetchStatusItf caller, void *pContext, SLuint32 event) {
     SLpermille level = 0;
     SLresult result;
+    CallbackCntxt *pCntxt = (CallbackCntxt *) pContext;
     result = (*caller)->GetFillLevel(caller, &level);
     ExitOnError(result);
     SLuint32 status;
@@ -112,23 +112,24 @@ void PrefetchEventCallback(SLPrefetchStatusItf caller, void *pContext __unused, 
     if ((PREFETCHEVENT_ERROR_CANDIDATE == (event & PREFETCHEVENT_ERROR_CANDIDATE))
         && (level == 0) && (status == SL_PREFETCHSTATUS_UNDERFLOW)) {
         LOGE("PrefetchEventCallback: Error while prefetching data, exiting");
-        prefetchError = true;
-        SignalEos();
+        pCntxt->prefetchError = true;
+        pCntxt->eos = true;
     }
 }
 
 /* Callback for "playback" events, i.e. event happening during decoding */
 void DecProgressCallback(
         SLPlayItf caller,
-        void *pContext __unused,
+        void *pContext,
         SLuint32 event) {
     SLresult result;
     SLmillisecond msec;
+    CallbackCntxt *pCntxt = (CallbackCntxt *) pContext;
     result = (*caller)->GetPosition(caller, &msec);
     ExitOnError(result);
     if (SL_PLAYEVENT_HEADATEND & event) {
         LOGV("SL_PLAYEVENT_HEADATEND current position=%u ms", msec);
-        SignalEos();
+        pCntxt->eos = true;
     }
 }
 //-----------------------------------------------------------------
@@ -138,9 +139,11 @@ void DecPlayCallback(
         void *pContext) {
     CallbackCntxt *pCntxt = (CallbackCntxt *) pContext;
     /* Save the decoded data  */
-    if (fwrite(pCntxt->pDataBase, 1, BUFFER_SIZE_IN_BYTES, gFp) < BUFFER_SIZE_IN_BYTES) {
+    if (pCntxt == NULL) return;
+    if (fwrite(pCntxt->pDataBase, 1, BUFFER_SIZE_IN_BYTES, pCntxt->gFdestination) <
+        BUFFER_SIZE_IN_BYTES) {
         LOGE("Error writing to output file, signaling EOS");
-        SignalEos();
+        pCntxt->eos = true;
         return;
     }
     /* Increase data pointer by buffer size */
@@ -153,30 +156,31 @@ void DecPlayCallback(
     //  synchronize it with some other event, as the OpenSL ES framework will block until the
     //  buffer queue callback return to proceed with the decoding.
     /* Example: query of the decoded PCM format */
-    if (formatQueried) {
+    if (pCntxt->formatQueried) {
         return;
     }
-    SLresult res = (*pCntxt->metaItf)->GetValue(pCntxt->metaItf, sampleRateKeyIndex,
-                                                PCM_METADATA_VALUE_SIZE, pcmMetaData);
+    SLresult res = (*pCntxt->metaItf)->GetValue(pCntxt->metaItf, pCntxt->sampleRateKeyIndex,
+                                                PCM_METADATA_VALUE_SIZE, pCntxt->pcmMetaData);
     ExitOnError(res);
     // Note: here we could verify the following:
     //         pcmMetaData->encoding == SL_CHARACTERENCODING_BINARY
     //         pcmMetaData->size == sizeof(SLuint32)
     //       but the call was successful for the PCM format keys, so those conditions are implied
-    LOGV("sample rate = %dHz, ", *((SLuint32 *) pcmMetaData->data));
-    res = (*pCntxt->metaItf)->GetValue(pCntxt->metaItf, channelCountKeyIndex,
-                                       PCM_METADATA_VALUE_SIZE, pcmMetaData);
+    LOGV("sample rate = %dHz, ", *((SLuint32 *) pCntxt->pcmMetaData->data));
+    res = (*pCntxt->metaItf)->GetValue(pCntxt->metaItf, pCntxt->channelCountKeyIndex,
+                                       PCM_METADATA_VALUE_SIZE, pCntxt->pcmMetaData);
     ExitOnError(res);
-    LOGV("channel count = %d", *((SLuint32 *) pcmMetaData->data));
-    formatQueried = true;
+    LOGV("channel count = %d", *((SLuint32 *) pCntxt->pcmMetaData->data));
+    pCntxt->formatQueried = true;
 }
 //-----------------------------------------------------------------
 /* Decode an audio path by opening a file descriptor on that path  */
-void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, int samplingRateHz) {
-    gFp = fopen(dst, "w");
-    if (NULL == gFp) {
+int decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, int samplingRateHz) {
+    CallbackCntxt cntxt;
+    cntxt.gFdestination = fopen(dst, "w");
+    if (NULL == cntxt.gFdestination) {
         LOGE("Could not write to the phone memory");
-        ExitOnError(SL_RESULT_RESOURCE_ERROR);
+        return -1;
     }
     SLresult result;
     SLEngineItf EngineItf;
@@ -202,10 +206,10 @@ void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, in
         iidArray[i] = SL_IID_NULL;
     }
     /* allocate memory to receive the PCM format metadata */
-    if (!pcmMetaData) {
-        pcmMetaData = (SLMetadataInfo *) malloc(PCM_METADATA_VALUE_SIZE);
+    if (!(cntxt.pcmMetaData)) {
+        cntxt.pcmMetaData = (SLMetadataInfo *) malloc(PCM_METADATA_VALUE_SIZE);
     }
-    formatQueried = false;
+    cntxt.formatQueried = false;
     /* ------------------------------------------------------ */
     /* Configuration of the player  */
     /* Request the AndroidSimpleBufferQueue interface */
@@ -259,7 +263,9 @@ void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, in
     ExitOnError(result);
     result = (*playItf)->SetCallbackEventsMask(playItf, SL_PLAYEVENT_HEADATEND);
     ExitOnError(result);
-    result = (*playItf)->RegisterCallback(playItf, DecProgressCallback, NULL);
+    result = (*playItf)->RegisterCallback(playItf,
+                                          DecProgressCallback,
+                                          &cntxt);
     ExitOnError(result);
     LOGV("Play callback registered");
     /* Get the buffer queue interface which was explicitly requested */
@@ -274,13 +280,14 @@ void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, in
     ExitOnError(result);
     /* ------------------------------------------------------ */
     /* Initialize the callback and its context for the decoding buffer queue */
-    CallbackCntxt cntxt;
     cntxt.playItf = playItf;
     cntxt.metaItf = mdExtrItf;
-    cntxt.pDataBase = (int8_t *) &pcmData;
+    cntxt.pDataBase = (int8_t *) &cntxt.pcmData;
     cntxt.pData = cntxt.pDataBase;
-    cntxt.size = sizeof(pcmData);
-    result = (*decBuffQueueItf)->RegisterCallback(decBuffQueueItf, DecPlayCallback, &cntxt);
+    cntxt.size = sizeof(cntxt.pcmData);
+    result = (*decBuffQueueItf)->RegisterCallback(decBuffQueueItf,
+                                                  DecPlayCallback,
+                                                  &cntxt);
     ExitOnError(result);
     /* Enqueue buffers to map the region of memory allocated to store the decoded data */
     LOGV("Enqueueing buffer ");
@@ -292,7 +299,7 @@ void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, in
     cntxt.pData = cntxt.pDataBase;
     /* ------------------------------------------------------ */
     /* Initialize the callback for prefetch errors, if we can't open the resource to decode */
-    result = (*prefetchItf)->RegisterCallback(prefetchItf, PrefetchEventCallback, &prefetchItf);
+    result = (*prefetchItf)->RegisterCallback(prefetchItf, PrefetchEventCallback, &cntxt);
     ExitOnError(result);
     result = (*prefetchItf)->SetCallbackEventsMask(prefetchItf, PREFETCHEVENT_ERROR_CANDIDATE);
     ExitOnError(result);
@@ -305,12 +312,12 @@ void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, in
     SLuint32 prefetchStatus = SL_PREFETCHSTATUS_UNDERFLOW;
     SLuint32 timeOutIndex = 50; // time out prefetching after 5s
     while ((prefetchStatus != SL_PREFETCHSTATUS_SUFFICIENTDATA) && (timeOutIndex > 0) &&
-           !prefetchError) {
+           !(cntxt.prefetchError)) {
         usleep(10 * 1000);
         (*prefetchItf)->GetPrefetchStatus(prefetchItf, &prefetchStatus);
         timeOutIndex--;
     }
-    if (timeOutIndex == 0 || prefetchError) {
+    if (timeOutIndex == 0 || cntxt.prefetchError) {
         LOGE("Failure to prefetch data in time, exiting");
         ExitOnError(SL_RESULT_CONTENT_NOT_FOUND);
     }
@@ -350,22 +357,22 @@ void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, in
                  i, keyInfo->size, keyInfo->data, valueSize);
             /* find out the key index of the metadata we're interested in */
             if (!strcmp((char *) keyInfo->data, ANDROID_KEY_PCMFORMAT_NUMCHANNELS)) {
-                channelCountKeyIndex = i;
+                cntxt.channelCountKeyIndex = i;
             } else if (!strcmp((char *) keyInfo->data, ANDROID_KEY_PCMFORMAT_SAMPLERATE)) {
-                sampleRateKeyIndex = i;
+                cntxt.sampleRateKeyIndex = i;
             }
             free(keyInfo);
         }
     }
-    if (channelCountKeyIndex != -1) {
+    if (cntxt.channelCountKeyIndex != -1) {
         LOGV("Key %s is at index %d",
-             ANDROID_KEY_PCMFORMAT_NUMCHANNELS, channelCountKeyIndex);
+             ANDROID_KEY_PCMFORMAT_NUMCHANNELS, cntxt.channelCountKeyIndex);
     } else {
         LOGD("Unable to find key %s", ANDROID_KEY_PCMFORMAT_NUMCHANNELS);
     }
-    if (sampleRateKeyIndex != -1) {
+    if (cntxt.sampleRateKeyIndex != -1) {
         LOGV("Key %s is at index %d",
-             ANDROID_KEY_PCMFORMAT_SAMPLERATE, sampleRateKeyIndex);
+             ANDROID_KEY_PCMFORMAT_SAMPLERATE, cntxt.sampleRateKeyIndex);
     } else {
         LOGD("Unable to find key %s", ANDROID_KEY_PCMFORMAT_SAMPLERATE);
     }
@@ -376,7 +383,7 @@ void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, in
     LOGV("Starting to decode");
     /* Decode until the end of the stream is reached */
     {
-        while (!eos) {
+        while (!(cntxt.eos)) {
             usleep(10 * 1000);
         }
     }
@@ -389,9 +396,11 @@ void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, in
     LOGV("Stopped decoding");
     /* Destroy the AudioPlayer object */
     (*player)->Destroy(player);
-    fclose(gFp);
-    free(pcmMetaData);
-    pcmMetaData = NULL;
+
+    fclose(cntxt.gFdestination);
+    free(cntxt.pcmMetaData);
+
+    return 0;
 }
 
 
@@ -471,9 +480,9 @@ Java_uk_me_berndporr_flac2raw_Flac2Raw_uncompressAsset2File(JNIEnv *env,
     const char *fRawUTF = env->GetStringUTFChars(fRaw, NULL);
 
     // use asset manager to open asset by filename
-    AAssetManager* mgr = AAssetManager_fromJava(env, assetManager);
+    AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
     assert(NULL != mgr);
-    AAsset* asset = AAssetManager_open(mgr, fFlacUTF, AASSET_MODE_UNKNOWN);
+    AAsset *asset = AAssetManager_open(mgr, fFlacUTF, AASSET_MODE_UNKNOWN);
 
     // the asset might not be found
     if (NULL == asset) {
@@ -497,14 +506,14 @@ Java_uk_me_berndporr_flac2raw_Flac2Raw_uncompressAsset2File(JNIEnv *env,
     result = (*sl)->Realize(sl, SL_BOOLEAN_FALSE);
     ExitOnError(result);
 
-    decToBuffQueue(sl, &audioSrc, fRawUTF, samplingRateHz);
+    int r = decToBuffQueue(sl, &audioSrc, fRawUTF, samplingRateHz);
     /* Shutdown OpenSL ES */
     (*sl)->Destroy(sl);
 
     env->ReleaseStringUTFChars(fFlac, fFlacUTF);
     env->ReleaseStringUTFChars(fRaw, fRawUTF);
 
-    return 0;
+    return r;
 }
 
 }

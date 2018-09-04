@@ -1,6 +1,7 @@
 # Flac to Raw
 
-This Android package converts a flac file to a raw file. The output format is 16 bit / little
+This Android package converts a flac file to a raw file. The flac file can be in the filesystem or be an Android asset.
+The output format is 16 bit / little
 endian without any header. Just raw audio. Supported sampling rates are 8kHz, 44.1kHz and 48kHz.
 
 It uses the C high performance audio stack of Android so the only limiting factor is the writing
@@ -25,6 +26,7 @@ It's implemented as a class with a single method. Instantiating the class loads 
 shared library into memory and then you can call `uncompressFile2File` which converts the
 audio. The call is blocking.
 
+#### If you want to convert from file to file:
 ```
 // instantiate the converter
 Flac2Raw flac2Raw = new Flac2Raw();
@@ -32,11 +34,22 @@ Flac2Raw flac2Raw = new Flac2Raw();
 flac2Raw.uncompressFile2File(getFullPath(audioFileName+".flac"),getFullPath(audioFileName+".raw"),48000);
 ```
 
+#### If you want to decompress an Android asset to a raw file:
+```
+        AssetManager assetManager = getAssets();
+        flac2Raw.uncompressAsset2File(
+                assetManager,
+                "myasset.flac",
+                getFullPath(audioAsset+".raw"),48000);
+```
+
+
+
 ## Unit test
 The unit test `UncompressFlacFileTest.java` contains a full example. 
 Place a mono flac file called `test.flac` which has a sampling rate of 48kHz in the
 `Music` folder of your phone. Run the unit test and you should then see a `test.raw`
-in the `Music` folder.
+in the `Music` folder. It also decompresses an asset from the asset directory.
 
 ## Status
 

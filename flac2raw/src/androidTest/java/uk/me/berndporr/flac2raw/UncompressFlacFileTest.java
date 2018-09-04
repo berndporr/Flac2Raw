@@ -5,6 +5,7 @@ import android.app.UiAutomation;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.AssetManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -29,8 +30,6 @@ import static org.junit.Assert.*;
  */
 @RunWith(AndroidJUnit4.class)
 public class UncompressFlacFileTest {
-
-    static final String audioFileName = "test";
 
     public class PermissionRequester {
 
@@ -77,10 +76,10 @@ public class UncompressFlacFileTest {
         return f.getAbsolutePath();
     }
 
-    private void updateFileSystem(Context context) {
+    private void updateFileSystem(Context context, String filename) {
         // update the filesystem
         Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-        Uri contentUri = Uri.fromFile(new File(getFullPath(audioFileName+".raw")));
+        Uri contentUri = Uri.fromFile(new File(getFullPath(filename)));
         mediaScanIntent.setData(contentUri);
         context.sendBroadcast(mediaScanIntent);
     }
@@ -96,12 +95,22 @@ public class UncompressFlacFileTest {
 
         // instantiate the converter
         Flac2Raw flac2Raw = new Flac2Raw();
+
+        final String audioFileName = "test";
         // run it
         flac2Raw.uncompressFile2File(
                 getFullPath(audioFileName+".flac"),
                 getFullPath(audioFileName+".raw"),
                 48000);
+        updateFileSystem(appContext,audioFileName+".raw");
 
-        updateFileSystem(appContext);
+        final String audioAsset="audioasset";
+        AssetManager assetManager = appContext.getAssets();
+        flac2Raw.uncompressAsset2File(
+                assetManager,
+                audioAsset+".flac",
+                getFullPath(audioAsset+".raw"),48000);
+        updateFileSystem(appContext,audioAsset+".raw");
+
     }
 }

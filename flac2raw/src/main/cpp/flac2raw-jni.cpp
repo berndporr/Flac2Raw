@@ -23,6 +23,11 @@
 #include <fcntl.h>
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
+#include <sys/types.h>
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
+#include <assert.h>
+
 
 extern "C" {
 
@@ -167,18 +172,12 @@ void DecPlayCallback(
 }
 //-----------------------------------------------------------------
 /* Decode an audio path by opening a file descriptor on that path  */
-void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst, int samplingRateHz) {
+void decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, int samplingRateHz) {
     gFp = fopen(dst, "w");
     if (NULL == gFp) {
         LOGE("Could not write to the phone memory");
         ExitOnError(SL_RESULT_RESOURCE_ERROR);
     }
-    FILE *fsrc = fopen(src, "r");
-    if (fsrc == NULL) {
-        LOGE("Could not read from the phone memory: >>%s<<", src);
-        ExitOnError(SL_RESULT_RESOURCE_ERROR);
-    }
-    fclose(fsrc);
     SLresult result;
     SLEngineItf EngineItf;
     /* Objects this application uses: one audio player */
@@ -188,10 +187,6 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst, int sampli
     SLPrefetchStatusItf prefetchItf;
     SLPlayItf playItf;
     SLMetadataExtractionItf mdExtrItf;
-    /* Source of audio data for the decoding */
-    SLDataSource decSource;
-    SLDataLocator_URI decUri;
-    SLDataFormat_MIME decMime;
     /* Data sink for decoded audio */
     SLDataSink decDest;
     SLDataLocator_AndroidSimpleBufferQueue decBuffQueue;
@@ -222,16 +217,6 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst, int sampli
     /* Request the PrefetchStatus interface */
     required[2] = SL_BOOLEAN_TRUE;
     iidArray[2] = SL_IID_METADATAEXTRACTION;
-    /* Setup the data source */
-    decUri.locatorType = SL_DATALOCATOR_URI;
-    decUri.URI = (SLchar *) src;
-    decMime.formatType = SL_DATAFORMAT_MIME;
-    /*     this is how ignored mime information is specified, according to OpenSL ES spec
-     *     in 9.1.6 SLDataFormat_MIME and 8.23 SLMetadataTraversalItf GetChildInfo */
-    decMime.mimeType = (SLchar *) NULL;
-    decMime.containerType = SL_CONTAINERTYPE_UNSPECIFIED;
-    decSource.pLocator = (void *) &decUri;
-    decSource.pFormat = (void *) &decMime;
     /* Setup the data sink */
     decBuffQueue.locatorType = SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE;
     decBuffQueue.numBuffers = NB_BUFFERS_IN_QUEUE;
@@ -260,7 +245,7 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst, int sampli
     decDest.pLocator = (void *) &decBuffQueue;
     decDest.pFormat = (void *) &pcm;
     /* Create the audio player */
-    result = (*EngineItf)->CreateAudioPlayer(EngineItf, &player, &decSource, &decDest,
+    result = (*EngineItf)->CreateAudioPlayer(EngineItf, &player, decSource, &decDest,
                                              NUM_EXPLICIT_INTERFACES_FOR_PLAYER, iidArray,
                                              required);
     ExitOnError(result);
@@ -413,10 +398,10 @@ void decToBuffQueue(SLObjectItf sl, const char *src, const char *dst, int sampli
 //-----------------------------------------------------------------
 jint
 Java_uk_me_berndporr_flac2raw_Flac2Raw_uncompressFile2File(JNIEnv *env,
-                                                        jclass,
-                                                        jstring fFlac,
-                                                        jstring fRaw,
-                                                        jint samplingRateHz) {
+                                                           jclass,
+                                                           jstring fFlac,
+                                                           jstring fRaw,
+                                                           jint samplingRateHz) {
     SLresult result;
     SLObjectItf sl;
     SLEngineOption EngineOption[] = {
@@ -425,15 +410,101 @@ Java_uk_me_berndporr_flac2raw_Flac2Raw_uncompressFile2File(JNIEnv *env,
     const char *fFlacUTF = env->GetStringUTFChars(fFlac, NULL);
     const char *fRawUTF = env->GetStringUTFChars(fRaw, NULL);
 
+    FILE *fsrc = fopen(fFlacUTF, "r");
+    if (fsrc == NULL) {
+        LOGE("Could not read from the phone memory: >>%s<<", fFlacUTF);
+        env->ReleaseStringUTFChars(fFlac, fFlacUTF);
+        env->ReleaseStringUTFChars(fRaw, fRawUTF);
+        return 0;
+    }
+    fclose(fsrc);
+
+    /* Source of audio data for the decoding */
+    SLDataSource decSource;
+    SLDataLocator_URI decUri;
+    SLDataFormat_MIME decMime;
+
+    /* Setup the data source */
+    decUri.locatorType = SL_DATALOCATOR_URI;
+    decUri.URI = (SLchar *) fFlacUTF;
+    decMime.formatType = SL_DATAFORMAT_MIME;
+
+    /*     this is how ignored mime information is specified, according to OpenSL ES spec
+     *     in 9.1.6 SLDataFormat_MIME and 8.23 SLMetadataTraversalItf GetChildInfo */
+    decMime.mimeType = (SLchar *) NULL;
+    decMime.containerType = SL_CONTAINERTYPE_UNSPECIFIED;
+    decSource.pLocator = (void *) &decUri;
+    decSource.pFormat = (void *) &decMime;
+
     result = slCreateEngine(&sl, 1, EngineOption, 0, NULL, NULL);
     ExitOnError(result);
+
     /* Realizing the SL Engine in synchronous mode. */
     result = (*sl)->Realize(sl, SL_BOOLEAN_FALSE);
     ExitOnError(result);
-    decToBuffQueue(sl, fFlacUTF, fRawUTF, samplingRateHz);
+
+    decToBuffQueue(sl, &decSource, fRawUTF, samplingRateHz);
     /* Shutdown OpenSL ES */
     (*sl)->Destroy(sl);
+
+    env->ReleaseStringUTFChars(fFlac, fFlacUTF);
+    env->ReleaseStringUTFChars(fRaw, fRawUTF);
+
     return EXIT_SUCCESS;
+}
+
+
+//-----------------------------------------------------------------
+jint
+Java_uk_me_berndporr_flac2raw_Flac2Raw_uncompressAsset2File(JNIEnv *env,
+                                                            jclass,
+                                                            jobject assetManager,
+                                                            jstring fFlac,
+                                                            jstring fRaw,
+                                                            jint samplingRateHz) {
+    SLresult result;
+    SLObjectItf sl;
+    SLEngineOption EngineOption[] = {
+            {(SLuint32) SL_ENGINEOPTION_THREADSAFE, (SLuint32) SL_BOOLEAN_TRUE}
+    };
+    const char *fFlacUTF = env->GetStringUTFChars(fFlac, NULL);
+    const char *fRawUTF = env->GetStringUTFChars(fRaw, NULL);
+
+    // use asset manager to open asset by filename
+    AAssetManager* mgr = AAssetManager_fromJava(env, assetManager);
+    assert(NULL != mgr);
+    AAsset* asset = AAssetManager_open(mgr, fFlacUTF, AASSET_MODE_UNKNOWN);
+
+    // the asset might not be found
+    if (NULL == asset) {
+        return -1;
+    }
+
+    // open asset as file descriptor
+    off_t start, length;
+    int fd = AAsset_openFileDescriptor(asset, &start, &length);
+    assert(0 <= fd);
+    AAsset_close(asset);
+    // configure audio source
+    SLDataLocator_AndroidFD loc_fd = {SL_DATALOCATOR_ANDROIDFD, fd, start, length};
+    SLDataFormat_MIME format_mime = {SL_DATAFORMAT_MIME, NULL, SL_CONTAINERTYPE_UNSPECIFIED};
+    SLDataSource audioSrc = {&loc_fd, &format_mime};
+
+    result = slCreateEngine(&sl, 1, EngineOption, 0, NULL, NULL);
+    ExitOnError(result);
+
+    /* Realizing the SL Engine in synchronous mode. */
+    result = (*sl)->Realize(sl, SL_BOOLEAN_FALSE);
+    ExitOnError(result);
+
+    decToBuffQueue(sl, &audioSrc, fRawUTF, samplingRateHz);
+    /* Shutdown OpenSL ES */
+    (*sl)->Destroy(sl);
+
+    env->ReleaseStringUTFChars(fFlac, fFlacUTF);
+    env->ReleaseStringUTFChars(fRaw, fRawUTF);
+
+    return 0;
 }
 
 }

@@ -55,7 +55,7 @@ public class UncompressFlacFileTest {
     }
 
 
-    void askPerm() {
+    private void askPerm() {
         // asks automatically for permissions without a user dialogue
         PermissionRequester permissionRequester = new PermissionRequester();
         permissionRequester.request(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE);
@@ -69,7 +69,7 @@ public class UncompressFlacFileTest {
     private static final String TEST_SUBDIR = "Music";
 
     // full path to the directory where everything is stored
-    public static final File TEST_DIR =
+    private static final File TEST_DIR =
             new File(Environment.getExternalStorageDirectory().getPath(), TEST_SUBDIR);
 
     public static String getFullPath(String filename) {

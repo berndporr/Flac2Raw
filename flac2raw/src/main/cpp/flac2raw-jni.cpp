@@ -41,7 +41,6 @@ extern "C" {
 #define  LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define  LOGV(...)  __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, __VA_ARGS__)
-#define  LOGW(...)  __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 
 #define NUM_EXPLICIT_INTERFACES_FOR_PLAYER 3
 /* Size of the decode buffer queue */
@@ -344,13 +343,11 @@ int decToBuffQueue(SLObjectItf sl, SLDataSource *decSource, const char *dst, int
     //   of a PCM decoder. An application that would want to directly get access to those values
     //   can make assumptions about the size of the keys and their matching values (all SLuint32)
     SLuint32 itemCount;
-    result = (*mdExtrItf)->GetItemCount(mdExtrItf, &itemCount);
+    (*mdExtrItf)->GetItemCount(mdExtrItf, &itemCount);
     SLuint32 i, keySize, valueSize;
-    SLMetadataInfo *keyInfo, *value;
+    SLMetadataInfo *keyInfo;
     for (i = 0; i < itemCount; i++) {
-        keyInfo = NULL;
         keySize = 0;
-        value = NULL;
         valueSize = 0;
         result = (*mdExtrItf)->GetKeySize(mdExtrItf, i, &keySize);
         ExitOnError(result);
